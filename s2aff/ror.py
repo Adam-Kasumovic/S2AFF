@@ -170,7 +170,7 @@ class RORIndex:
                 parent_works_count = self.ror_dict[ror_id]["works_count"]
                 parent_name = self.ror_dict[ror_id]["name"]
                 relationships = self.ror_dict[ror_id]["relationships"]
-                relationships = sorted(relationships, key=lambda x: -self.ror_dict[x["id"]]["works_count"])
+                relationships = sorted(relationships, key=self.relationships_set)
                 for rel in relationships:
                     if rel["type"] == "Child":
                         child_id = rel["id"]
@@ -283,7 +283,7 @@ class RORIndex:
             }
             self.idf_lookup_min = min(self.idf_lookup.values())
 
-            self.idf_weight = lambda i: self.idf_lookup.get(i, self.idf_lookup_min)
+            self.idf_weight = self.weight_set
         else:
             self.idf_weight = None
 
@@ -334,6 +334,12 @@ class RORIndex:
         self.ror_address_counter = ror_address_counter
         self.ror_name_direct_lookup = ror_name_direct_lookup
         self.inverse_dict_fixed = inverse_dict_fixed
+
+    def weight_set(self, input):
+        return self.idf_lookup.get(input, self.idf_lookup_min)
+
+    def relationships_set(self, input):
+        return -self.ror_dict[input["id"]]["works_count"]
 
     def get_candidates_from_raw_affiliation(self, raw_affiliation, ner_predictor, look_for_grid_and_isni=True):
         """A wrapper function that puts the raw affiliation string through the

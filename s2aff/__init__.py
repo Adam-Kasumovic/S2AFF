@@ -1,5 +1,7 @@
 import logging
+import multiprocessing
 from s2aff.model import parse_ner_prediction
+from functools import partial
 
 logger = logging.getLogger("s2aff")
 logger.setLevel(logging.INFO)
@@ -9,6 +11,97 @@ ch.setFormatter(formatter)
 ch.setLevel(logging.INFO)
 logger.addHandler(ch)
 
+
+def run(self, *kwargs):
+    """
+    Run the function on the <items> iterable in parallel.
+    <kwargs> are passed to the function as static keyword arguments.
+    """
+    #self.debug(f"Starting Multi-processing Queue. {self.jobs} processes, {self.chunk_size} items / process.")
+    func = partial(, *kwargs)
+    with Pool(self.jobs) as pool:
+        result = pool.imap_unordered(func, self.items, self.chunk_size)
+        for r in result:
+            yield r
+def custom_error_callback(error):
+    print(f'\nS2AFF multiprocessing got error: {error}\n')
+
+def fill_list(start, end, inputs, self_ror_index, self_look_for_grid_and_isni, self_no_candidates_output_text, self_pairwise_model, self_top_k_first_stage, self_pairwise_model_threshold, self_no_ror_output_text, self_pairwise_model_delta_threshold, self_number_of_top_candidates_to_return):
+    # This function fills the result list with the values from start to end
+    for i in range(start, end):
+        counter, raw_affiliation, ner_prediction = inputs[i]
+        # Do some work here
+        print(
+            f"\nGetting ROR candidates and reranking for: '{raw_affiliation}' ({counter + 1}/{len(raw_affiliations)})\n",
+            end="\r",
+        )
+        main, child, address, early_candidates = parse_ner_prediction(ner_prediction, self_ror_index)
+        # sometimes the affiliation strings just contain GRID or ISNI ids
+        # todo: some time in the future the strings may contain ROR ids too
+        if self_look_for_grid_and_isni:
+            ror_from_grid = self_ror_index.extract_grid_and_map_to_ror(raw_affiliation)
+            ror_from_isni = self_ror_index.extract_isni_and_map_to_ror(raw_affiliation)
+            ror_from_grid_or_isni = ror_from_grid or ror_from_isni
+            found_early = ror_from_grid_or_isni is not None
+            if found_early:
+                candidates, scores = [ror_from_grid_or_isni], [1.0]
+        else:
+            found_early = False
+        # we don't want to rerank if we found a GRID or ISNI id
+        if not found_early:
+            candidates, scores = self_ror_index.get_candidates_from_main_affiliation(
+                main, address, early_candidates
+            )
+
+        if len(candidates) == 0:
+            output_scores_and_thresh = [self_no_candidates_output_text], [0.0]
+        else:
+            reranked_candidates, reranked_scores = self_pairwise_model.predict(
+                raw_affiliation, candidates[: self_top_k_first_stage], scores[: self_top_k_first_stage]
+            )
+            # apply threshold to reranked scores
+            if len(reranked_candidates) == 0:
+                output_scores_and_thresh = [self_no_candidates_output_text], [0.0]
+            elif len(reranked_candidates) == 1:
+                if reranked_scores[0] < self_pairwise_model_threshold:
+                    output_scores_and_thresh = [self_no_ror_output_text], [0.0]
+                else:
+                    output_scores_and_thresh = (reranked_candidates, reranked_scores)
+            else:
+                delta = reranked_scores[0] - reranked_scores[1]
+                if (
+                        reranked_scores[0] < self_pairwise_model_threshold
+                        and delta < self_pairwise_model_delta_threshold
+                ):
+                    output_scores_and_thresh = [self_no_ror_output_text], [0.0]
+                else:
+                    output_scores_and_thresh = (reranked_candidates, reranked_scores)
+        try:
+            display_name = self_ror_index.ror_dict[output_scores_and_thresh[0][0]]["name"]
+        except:
+            display_name = ""
+
+        # make a dict of outputs
+        output = {
+            "raw_affiliation": raw_affiliation,
+            "ner_prediction": ner_prediction,
+            "main_from_ner": main,
+            "child_from_ner": child,
+            "address_from_ner": address,
+            "stage1_candidates": list(candidates[: self_number_of_top_candidates_to_return]),
+            "stage1_scores": list(scores[: self_number_of_top_candidates_to_return]),
+            "stage2_candidates": list(output_scores_and_thresh[0][: self_number_of_top_candidates_to_return]),
+            "stage2_scores": list(output_scores_and_thresh[1][: self_number_of_top_candidates_to_return]),
+            "top_candidate_display_name": display_name,
+        }
+        return output
+
+
+ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return = None, None, None, None, None, None, None, None, None
+def set_s2aff_vars(ror_index_, look_for_grid_and_isni_, no_candidates_output_text_, pairwise_model_, top_k_first_stage_, pairwise_model_threshold_, no_ror_output_text_, pairwise_model_delta_threshold_, number_of_top_candidates_to_return_):
+    global ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return
+    ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return = \
+        ror_index_, look_for_grid_and_isni_, no_candidates_output_text_, pairwise_model_, top_k_first_stage_, pairwise_model_threshold_, no_ror_output_text_, pairwise_model_delta_threshold_, number_of_top_candidates_to_return_
 
 class S2AFF:
     """
@@ -46,12 +139,12 @@ class S2AFF:
         ner_predictor,
         ror_index,
         pairwise_model,
-        top_k_first_stage=100,
+        top_k_first_stage=20,
         pairwise_model_threshold=0.3,
         pairwise_model_delta_threshold=0.2,
         no_ror_output_text="NO_ROR_FOUND",
         no_candidates_output_text="NO_CANDIDATES_FOUND",
-        number_of_top_candidates_to_return=5,
+        number_of_top_candidates_to_return=1,
         look_for_grid_and_isni=True,
     ):
         self.ner_predictor = ner_predictor
@@ -64,6 +157,7 @@ class S2AFF:
         self.no_candidates_output_text = no_candidates_output_text
         self.number_of_top_candidates_to_return = number_of_top_candidates_to_return
         self.look_for_grid_and_isni = True
+        set_s2aff_vars(self.ror_index, self.look_for_grid_and_isni, self.no_candidates_output_text, self.pairwise_model, self.top_k_first_stage, self.pairwise_model_threshold, self.no_ror_output_text, self.pairwise_model_delta_threshold, self.number_of_top_candidates_to_return)
 
     def predict(self, raw_affiliations):
         """Predict function for raw affiliation strings
@@ -89,71 +183,34 @@ class S2AFF:
         ner_predictions = self.ner_predictor.predict(raw_affiliations)
         print("Done")
 
-        outputs = []
+        inputs_ = []
         for counter, (raw_affiliation, ner_prediction) in enumerate(zip(raw_affiliations, ner_predictions)):
-            print(
-                f"Getting ROR candidates and reranking for: '{raw_affiliation}' ({counter+1}/{len(raw_affiliations)})",
-                end="\r",
-            )
-            main, child, address, early_candidates = parse_ner_prediction(ner_prediction, self.ror_index)
-            # sometimes the affiliation strings just contain GRID or ISNI ids
-            # todo: some time in the future the strings may contain ROR ids too
-            if self.look_for_grid_and_isni:
-                ror_from_grid = self.ror_index.extract_grid_and_map_to_ror(raw_affiliation)
-                ror_from_isni = self.ror_index.extract_isni_and_map_to_ror(raw_affiliation)
-                ror_from_grid_or_isni = ror_from_grid or ror_from_isni
-                found_early = ror_from_grid_or_isni is not None
-                if found_early:
-                    candidates, scores = [ror_from_grid_or_isni], [1.0]
-            else:
-                found_early = False
-            # we don't want to rerank if we found a GRID or ISNI id
-            if not found_early:
-                candidates, scores = self.ror_index.get_candidates_from_main_affiliation(
-                    main, address, early_candidates
-                )
+            inputs_.append((counter, raw_affiliation, ner_prediction))
 
-            if len(candidates) == 0:
-                output_scores_and_thresh = [self.no_candidates_output_text], [0.0]
-            else:
-                reranked_candidates, reranked_scores = self.pairwise_model.predict(
-                    raw_affiliation, candidates[: self.top_k_first_stage], scores[: self.top_k_first_stage]
-                )
-                # apply threshold to reranked scores
-                if len(reranked_candidates) == 0:
-                    output_scores_and_thresh = [self.no_candidates_output_text], [0.0]
-                elif len(reranked_candidates) == 1:
-                    if reranked_scores[0] < self.pairwise_model_threshold:
-                        output_scores_and_thresh = [self.no_ror_output_text], [0.0]
-                    else:
-                        output_scores_and_thresh = (reranked_candidates, reranked_scores)
-                else:
-                    delta = reranked_scores[0] - reranked_scores[1]
-                    if (
-                        reranked_scores[0] < self.pairwise_model_threshold
-                        and delta < self.pairwise_model_delta_threshold
-                    ):
-                        output_scores_and_thresh = [self.no_ror_output_text], [0.0]
-                    else:
-                        output_scores_and_thresh = (reranked_candidates, reranked_scores)
-            try:
-                display_name = self.ror_index.ror_dict[output_scores_and_thresh[0][0]]["name"]
-            except:
-                display_name = ""
+        length = len(raw_affiliations)
+        result_ = [None] * length
 
-            # make a dict of outputs
-            output = {
-                "raw_affiliation": raw_affiliation,
-                "ner_prediction": ner_prediction,
-                "main_from_ner": main,
-                "child_from_ner": child,
-                "address_from_ner": address,
-                "stage1_candidates": list(candidates[: self.number_of_top_candidates_to_return]),
-                "stage1_scores": list(scores[: self.number_of_top_candidates_to_return]),
-                "stage2_candidates": list(output_scores_and_thresh[0][: self.number_of_top_candidates_to_return]),
-                "stage2_scores": list(output_scores_and_thresh[1][: self.number_of_top_candidates_to_return]),
-                "top_candidate_display_name": display_name,
-            }
+        # Set up the number of processes to use
+        num_processes = multiprocessing.cpu_count()
 
-            outputs.append(output)
-        return outputs
+        # Split the list into equal chunks for each process
+        chunk_size = length // num_processes
+        chunks = [(i * chunk_size, (i + 1) * chunk_size) for i in range(num_processes)]
+        chunks[-1] = (chunks[-1][0], length)  # Make sure the last chunk goes all the way to the end
+        print(f"\nCHUNKS: {chunks}\n")
+
+        fill_list_full = partial(fill_list, *args)
+
+        # Create a pool of processes to fill the list
+        pool = multiprocessing.Pool(processes=num_processes)
+
+        # Fill the list using multiple processes
+        for chunk in chunks:
+            pool.apply_async(fill_list, args=(chunk[0], chunk[1], inputs_, ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return), error_callback=custom_error_callback)
+
+        # Wait for all processes to finish
+        pool.close()
+        pool.join()
+
+        # The result list should now be fully populated
+        return result_
