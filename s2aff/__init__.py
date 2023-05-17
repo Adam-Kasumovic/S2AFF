@@ -1,7 +1,10 @@
 import logging
-import multiprocessing
+import multiprocess
+multiprocess.set_start_method("spawn", force=True)
 from s2aff.model import parse_ner_prediction
 from functools import partial
+import psutil
+ram = psutil.virtual_memory()
 
 logger = logging.getLogger("s2aff")
 logger.setLevel(logging.INFO)
@@ -12,11 +15,11 @@ ch.setLevel(logging.INFO)
 logger.addHandler(ch)
 
 
-def process_item(input):
+def process_item(input, ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return):
     counter, raw_affiliation, ner_prediction, len_raw_affiliations = input
     # Do some work here
     print(
-        f"Getting ROR candidates and reranking for: '{raw_affiliation}' ({counter + 1}/{len_raw_affiliations})",
+        f"\nGetting ROR candidates and reranking for: '{raw_affiliation}' ({counter + 1}/{len_raw_affiliations})\n",
         end="\r",
     )
     main, child, address, early_candidates = parse_ner_prediction(ner_prediction, ror_index)
@@ -87,13 +90,23 @@ def process_item(input):
     #print("\nFINISHED!\n")
     return output
 
-
-ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return = None, None, None, None, None, None, None, None, None
+if not multiprocess.parent_process():
+    ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return = None, None, None, None, None, None, None, None, None
 
 def set_s2aff_vars(ror_index_, look_for_grid_and_isni_, no_candidates_output_text_, pairwise_model_, top_k_first_stage_, pairwise_model_threshold_, no_ror_output_text_, pairwise_model_delta_threshold_, number_of_top_candidates_to_return_):
     global ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return
     ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return = \
         ror_index_, look_for_grid_and_isni_, no_candidates_output_text_, pairwise_model_, top_k_first_stage_, pairwise_model_threshold_, no_ror_output_text_, pairwise_model_delta_threshold_, number_of_top_candidates_to_return_
+
+
+def reranking_multi(inputs, **kwargs):
+    func = partial(process_item, **kwargs)
+    with multiprocess.get_context("spawn").Pool(multiprocess.cpu_count()) as pool:
+        chunk_s = round(((ram.total/(2**30))/32)*150)  # general rule is 150 per 32 GB of RAM
+        print("CHUNK_SIZE:", chunk_s)
+        generator = pool.imap_unordered(func, inputs, chunk_s)
+        for result in generator:
+            yield result
 
 
 class S2AFF:
@@ -152,7 +165,7 @@ class S2AFF:
         self.look_for_grid_and_isni = True
         set_s2aff_vars(self.ror_index, self.look_for_grid_and_isni, self.no_candidates_output_text, self.pairwise_model, self.top_k_first_stage, self.pairwise_model_threshold, self.no_ror_output_text, self.pairwise_model_delta_threshold, self.number_of_top_candidates_to_return)
 
-    def predict(self, raw_affiliations):
+    def predict(self, raw_affiliations, do_reranking_multiprocessing=False):
         """Predict function for raw affiliation strings
 
         :param raw_affiliations: a list of raw affiliation strings
@@ -180,4 +193,11 @@ class S2AFF:
         for counter, (raw_affiliation, ner_prediction) in enumerate(zip(raw_affiliations, ner_predictions)):
             inputs_.append((counter, raw_affiliation, ner_prediction, len(raw_affiliations)))
 
-        return [process_item(input) for input in inputs_]
+        if not do_reranking_multiprocessing:
+            return [process_item(input, ror_index=ror_index, look_for_grid_and_isni=look_for_grid_and_isni, no_candidates_output_text=no_candidates_output_text, pairwise_model=pairwise_model, top_k_first_stage=top_k_first_stage, pairwise_model_threshold=pairwise_model_threshold, no_ror_output_text=no_ror_output_text, pairwise_model_delta_threshold=pairwise_model_delta_threshold, number_of_top_candidates_to_return=number_of_top_candidates_to_return) for input in inputs_]
+
+        generator = reranking_multi(inputs_, ror_index=ror_index, look_for_grid_and_isni=look_for_grid_and_isni, no_candidates_output_text=no_candidates_output_text, pairwise_model=pairwise_model, top_k_first_stage=top_k_first_stage, pairwise_model_threshold=pairwise_model_threshold, no_ror_output_text=no_ror_output_text, pairwise_model_delta_threshold=pairwise_model_delta_threshold, number_of_top_candidates_to_return=number_of_top_candidates_to_return)
+        outputs = []
+        for r in generator:
+            outputs.append(r)
+        return outputs
