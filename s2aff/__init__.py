@@ -3,8 +3,6 @@ import multiprocess
 multiprocess.set_start_method("spawn", force=True)
 from s2aff.model import parse_ner_prediction
 from functools import partial
-import psutil
-ram = psutil.virtual_memory()
 
 logger = logging.getLogger("s2aff")
 logger.setLevel(logging.INFO)
@@ -102,9 +100,7 @@ def set_s2aff_vars(ror_index_, look_for_grid_and_isni_, no_candidates_output_tex
 def reranking_multi(inputs, **kwargs):
     func = partial(process_item, **kwargs)
     with multiprocess.get_context("spawn").Pool(multiprocess.cpu_count()) as pool:
-        chunk_s = round(((ram.total/(2**30))/32)*150)  # general rule is 150 per 32 GB of RAM
-        print("CHUNK_SIZE:", chunk_s)
-        generator = pool.imap_unordered(func, inputs, chunk_s)
+        generator = pool.imap_unordered(func, inputs, min(100, inputs[-1][-1]))
         for result in generator:
             yield result
 
