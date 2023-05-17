@@ -98,9 +98,10 @@ def set_s2aff_vars(ror_index_, look_for_grid_and_isni_, no_candidates_output_tex
 
 
 def reranking_multi(inputs, **kwargs):
+    # inputs[-1][-1] will be the batch size
     func = partial(process_item, **kwargs)
     with multiprocessing.get_context("spawn").Pool(multiprocessing.cpu_count()) as pool:
-        generator = pool.imap_unordered(func, inputs, min(100, inputs[-1][-1]))
+        generator = pool.imap_unordered(func, inputs, min(100, inputs[-1][-1]))  # TODO: the batch size (third arg) could use some work
         for result in generator:
             yield result
 
