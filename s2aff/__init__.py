@@ -1,6 +1,6 @@
 import logging
-import multiprocess
-multiprocess.set_start_method("spawn", force=True)
+import multiprocessing
+multiprocessing.set_start_method("spawn", force=True)
 from s2aff.model import parse_ner_prediction
 from functools import partial
 
@@ -88,7 +88,7 @@ def process_item(input, ror_index, look_for_grid_and_isni, no_candidates_output_
     #print("\nFINISHED!\n")
     return output
 
-if not multiprocess.parent_process():
+if not multiprocessing.parent_process():
     ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return = None, None, None, None, None, None, None, None, None
 
 def set_s2aff_vars(ror_index_, look_for_grid_and_isni_, no_candidates_output_text_, pairwise_model_, top_k_first_stage_, pairwise_model_threshold_, no_ror_output_text_, pairwise_model_delta_threshold_, number_of_top_candidates_to_return_):
@@ -99,7 +99,7 @@ def set_s2aff_vars(ror_index_, look_for_grid_and_isni_, no_candidates_output_tex
 
 def reranking_multi(inputs, **kwargs):
     func = partial(process_item, **kwargs)
-    with multiprocess.get_context("spawn").Pool(multiprocess.cpu_count()) as pool:
+    with multiprocessing.get_context("spawn").Pool(multiprocessing.cpu_count()) as pool:
         generator = pool.imap_unordered(func, inputs, min(100, inputs[-1][-1]))
         for result in generator:
             yield result
