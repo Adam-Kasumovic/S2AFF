@@ -15,6 +15,7 @@ from simpletransformers.ner import NERModel, NERArgs
 from blingfire import text_to_words
 from s2aff.consts import PATHS
 from s2aff.text import fix_text, CERTAINLY_MAIN
+import multiprocessing
 
 
 FEATURE_NAMES = list(FEATURE_NAMES)
@@ -154,7 +155,7 @@ class NERPredictor:
     def __init__(self, model_path=PATHS["ner_model"], model_type="roberta", use_cuda=True):
         self.model_path = model_path
         self.model_type = model_type
-        self.use_cuda = use_cuda
+        self.use_cuda = True
         if self.model_path is not None:
             self.load_model(self.model_path, self.model_type)
 
@@ -169,12 +170,12 @@ class NERPredictor:
         self.model = NERModel(
             model_type,
             model_path,
-            use_cuda=self.use_cuda,
+            use_cuda=self.use_cuda,  # significant potential for speedups here by changing things
             args={
-                "use_multiprocessing": False,
-                "use_multiprocessing_for_evaluation": False,
-                "process_count": 1,
-                "eval_batch_size": 8,
+                "use_multiprocessing": True,
+                "use_multiprocessing_for_evaluation": True,
+                "process_count": multiprocessing.cpu_count(),
+                "eval_batch_size": multiprocessing.cpu_count()*8,
             },
         )
 
