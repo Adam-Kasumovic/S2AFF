@@ -16,10 +16,10 @@ logger.addHandler(ch)
 def process_item(input, ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return):
     counter, raw_affiliation, ner_prediction, len_raw_affiliations = input
     # Do some work here
-    print(
-        f"\nGetting ROR candidates and reranking for: '{raw_affiliation}' ({counter + 1}/{len_raw_affiliations})\n",
-        end="\r",
-    )
+    #print(
+    #    f"\nGetting ROR candidates and reranking for: '{raw_affiliation}' ({counter + 1}/{len_raw_affiliations})\n",
+    #    end="\r",
+    #)
     main, child, address, early_candidates = parse_ner_prediction(ner_prediction, ror_index)
     # sometimes the affiliation strings just contain GRID or ISNI ids
     # todo: some time in the future the strings may contain ROR ids too
