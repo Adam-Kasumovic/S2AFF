@@ -155,7 +155,7 @@ class NERPredictor:
     def __init__(self, model_path=PATHS["ner_model"], model_type="roberta", use_cuda=True):
         self.model_path = model_path
         self.model_type = model_type
-        self.use_cuda = True
+        self.use_cuda = use_cuda
         if self.model_path is not None:
             self.load_model(self.model_path, self.model_type)
 
