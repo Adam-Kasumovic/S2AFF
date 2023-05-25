@@ -162,7 +162,7 @@ class S2AFF:
         self.look_for_grid_and_isni = True
         set_s2aff_vars(self.ror_index, self.look_for_grid_and_isni, self.no_candidates_output_text, self.pairwise_model, self.top_k_first_stage, self.pairwise_model_threshold, self.no_ror_output_text, self.pairwise_model_delta_threshold, self.number_of_top_candidates_to_return)
 
-    def predict(self, raw_affiliations, do_reranking_multiprocessing=False, mode='gpu', ner_predictions_input=None):
+    def predict(self, raw_affiliations, do_reranking_multiprocessing=False, mode='gpu', ner_predictions_input=None, sub_ror_index=None, sub_look_for_grid_and_isni=None, sub_no_candidates_output_text=None, sub_pairwise_model=None, sub_top_k_first_stage=None, sub_pairwise_model_threshold=None, sub_no_ror_output_text=None, sub_pairwise_model_delta_threshold=None, sub_number_of_top_candidates_to_return=None):
         """Predict function for raw affiliation strings
 
         :param raw_affiliations: a list of raw affiliation strings
@@ -194,9 +194,13 @@ class S2AFF:
                 inputs_.append((counter, raw_affiliation, ner_prediction, len(raw_affiliations)))
 
             if not do_reranking_multiprocessing:
-                return [process_item(input, ror_index=ror_index, look_for_grid_and_isni=look_for_grid_and_isni, no_candidates_output_text=no_candidates_output_text, pairwise_model=pairwise_model, top_k_first_stage=top_k_first_stage, pairwise_model_threshold=pairwise_model_threshold, no_ror_output_text=no_ror_output_text, pairwise_model_delta_threshold=pairwise_model_delta_threshold, number_of_top_candidates_to_return=number_of_top_candidates_to_return) for input in inputs_]
+                return [process_item(input, ror_index=sub_ror_index, look_for_grid_and_isni=sub_look_for_grid_and_isni, no_candidates_output_text=sub_no_candidates_output_text, pairwise_model=sub_pairwise_model, top_k_first_stage=sub_top_k_first_stage, pairwise_model_threshold=sub_pairwise_model_threshold, no_ror_output_text=sub_no_ror_output_text, pairwise_model_delta_threshold=sub_pairwise_model_delta_threshold, number_of_top_candidates_to_return=sub_number_of_top_candidates_to_return) for input in inputs_]
 
-            generator = reranking_multi(inputs_, ror_index=ror_index, look_for_grid_and_isni=look_for_grid_and_isni, no_candidates_output_text=no_candidates_output_text, pairwise_model=pairwise_model, top_k_first_stage=top_k_first_stage, pairwise_model_threshold=pairwise_model_threshold, no_ror_output_text=no_ror_output_text, pairwise_model_delta_threshold=pairwise_model_delta_threshold, number_of_top_candidates_to_return=number_of_top_candidates_to_return)
+            generator = reranking_multi(inputs_, ror_index=sub_ror_index, look_for_grid_and_isni=sub_look_for_grid_and_isni, no_candidates_output_text=sub_no_candidates_output_text, pairwise_model=sub_pairwise_model, top_k_first_stage=sub_top_k_first_stage, pairwise_model_threshold=sub_pairwise_model_threshold, no_ror_output_text=sub_no_ror_output_text, pairwise_model_delta_threshold=sub_pairwise_model_delta_threshold, number_of_top_candidates_to_return=sub_number_of_top_candidates_to_return)
+            set_s2aff_vars(sub_ror_index, sub_look_for_grid_and_isni, sub_no_candidates_output_text,
+                           sub_pairwise_model, sub_top_k_first_stage, sub_pairwise_model_threshold,
+                           sub_no_ror_output_text, sub_pairwise_model_delta_threshold,
+                           sub_number_of_top_candidates_to_return)
             outputs = []
             for r in generator:
                 outputs.append(r)
