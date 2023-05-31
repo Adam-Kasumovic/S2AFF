@@ -14,7 +14,7 @@ logger.addHandler(ch)
 
 
 def process_item(input, ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return):
-    counter, raw_affiliation, ner_prediction, len_raw_affiliations = input
+    counter, raw_affiliation, ner_prediction, len_raw_affiliations, id_ = input
     # Do some work here
     #print(
     #    f"\nGetting ROR candidates and reranking for: '{raw_affiliation}' ({counter + 1}/{len_raw_affiliations})\n",
@@ -84,6 +84,7 @@ def process_item(input, ror_index, look_for_grid_and_isni, no_candidates_output_
         "stage2_candidates": list(output_scores_and_thresh[0][: number_of_top_candidates_to_return]),
         "stage2_scores": list(output_scores_and_thresh[1][: number_of_top_candidates_to_return]),
         "top_candidate_display_name": display_name,
+        "id": id_
     }
     #print("\nFINISHED!\n")
     return output
@@ -162,7 +163,7 @@ class S2AFF:
         self.look_for_grid_and_isni = True
         set_s2aff_vars(self.ror_index, self.look_for_grid_and_isni, self.no_candidates_output_text, self.pairwise_model, self.top_k_first_stage, self.pairwise_model_threshold, self.no_ror_output_text, self.pairwise_model_delta_threshold, self.number_of_top_candidates_to_return)
 
-    def predict(self, raw_affiliations, do_reranking_multiprocessing=False, mode='gpu', ner_predictions_input=None, sub_ror_index=None, sub_look_for_grid_and_isni=None, sub_no_candidates_output_text=None, sub_pairwise_model=None, sub_top_k_first_stage=None, sub_pairwise_model_threshold=None, sub_no_ror_output_text=None, sub_pairwise_model_delta_threshold=None, sub_number_of_top_candidates_to_return=None):
+    def predict(self, raw_affiliations, do_reranking_multiprocessing=False, mode='gpu', ner_predictions_input=None, sub_ror_index=None, sub_look_for_grid_and_isni=None, sub_no_candidates_output_text=None, sub_pairwise_model=None, sub_top_k_first_stage=None, sub_pairwise_model_threshold=None, sub_no_ror_output_text=None, sub_pairwise_model_delta_threshold=None, sub_number_of_top_candidates_to_return=None, ids=None):
         """Predict function for raw affiliation strings
 
         :param raw_affiliations: a list of raw affiliation strings
@@ -190,8 +191,8 @@ class S2AFF:
 
         else:
             inputs_ = []
-            for counter, (raw_affiliation, ner_prediction) in enumerate(zip(raw_affiliations, ner_predictions_input)):
-                inputs_.append((counter, raw_affiliation, ner_prediction, len(raw_affiliations)))
+            for counter, (raw_affiliation, ner_prediction, id_) in enumerate(zip(raw_affiliations, ner_predictions_input, ids)):
+                inputs_.append((counter, raw_affiliation, ner_prediction, len(raw_affiliations), id_))
 
             if not do_reranking_multiprocessing:
                 return [process_item(input, ror_index=sub_ror_index, look_for_grid_and_isni=sub_look_for_grid_and_isni, no_candidates_output_text=sub_no_candidates_output_text, pairwise_model=sub_pairwise_model, top_k_first_stage=sub_top_k_first_stage, pairwise_model_threshold=sub_pairwise_model_threshold, no_ror_output_text=sub_no_ror_output_text, pairwise_model_delta_threshold=sub_pairwise_model_delta_threshold, number_of_top_candidates_to_return=sub_number_of_top_candidates_to_return) for input in inputs_]
