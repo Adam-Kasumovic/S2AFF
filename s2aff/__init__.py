@@ -16,10 +16,10 @@ logger.addHandler(ch)
 def process_item(input, ror_index, look_for_grid_and_isni, no_candidates_output_text, pairwise_model, top_k_first_stage, pairwise_model_threshold, no_ror_output_text, pairwise_model_delta_threshold, number_of_top_candidates_to_return):
     counter, raw_affiliation, ner_prediction, len_raw_affiliations, id_ = input
     # Do some work here
-    #print(
-    #    f"\nGetting ROR candidates and reranking for: '{raw_affiliation}' ({counter + 1}/{len_raw_affiliations})\n",
-    #    end="\r",
-    #)
+    print(
+       f"\nGetting ROR candidates and reranking for: '{raw_affiliation}' ({counter + 1}/{len_raw_affiliations})\n",
+       end="\r",
+    )
     main, child, address, early_candidates = parse_ner_prediction(ner_prediction, ror_index)
     # sometimes the affiliation strings just contain GRID or ISNI ids
     # todo: some time in the future the strings may contain ROR ids too
@@ -75,14 +75,14 @@ def process_item(input, ror_index, look_for_grid_and_isni, no_candidates_output_
     # make a dict of outputs
     output = {
         "raw_affiliation": raw_affiliation,
-        "ner_prediction": ner_prediction,
-        "main_from_ner": main,
-        "child_from_ner": child,
-        "address_from_ner": address,
-        "stage1_candidates": list(candidates[: number_of_top_candidates_to_return]),
-        "stage1_scores": list(scores[: number_of_top_candidates_to_return]),
+        # "ner_prediction": ner_prediction,
+        # "main_from_ner": main,
+        # "child_from_ner": child,
+        # "address_from_ner": address,
+        # "stage1_candidates": list(candidates[: number_of_top_candidates_to_return]),
+        # "stage1_scores": list(scores[: number_of_top_candidates_to_return]),
         "stage2_candidates": list(output_scores_and_thresh[0][: number_of_top_candidates_to_return]),
-        "stage2_scores": list(output_scores_and_thresh[1][: number_of_top_candidates_to_return]),
+        # "stage2_scores": list(output_scores_and_thresh[1][: number_of_top_candidates_to_return]),
         "top_candidate_display_name": display_name,
         "id": id_
     }
